@@ -47,8 +47,27 @@ private struct BrowserCurrentTabsSeam: View {
                 && (context.capabilities.reservesReorderSectionZones || !sidebar.section(.saved).holdsTabRows),
             showsClearAction: showsClearAction,
             canClear: holdsCurrentTabs,
-            clear: { _ = context.tabActions.clearCurrentTabs() }
+            clear: { _ = context.tabActions.clearCurrentTabs() },
+            canTidy: canTidy,
+            tidy: { try await context.tabActions.tidyCurrentTabs() },
+            prepareTidy: OnDeviceTabTidyingService.prewarm
         )
+        .background { BrowserTidyBackgroundWork(context: context) }
+    }
+
+    /// Whether the person turned Tidy on, the on-device model can run, its word
+    /// table is ready, and the current section's top level holds enough tabs
+    /// to be worth tidying. Counted from the outline's rows, so a page changing
+    /// its title never redraws the seam.
+    private var canTidy: Bool {
+        guard BrowserAppPreferenceStore.shared.offersTabTidying, OnDeviceTabTidyingService.isModelAvailable,
+            TidyModelDownloads.shared.embedder != nil
+        else {
+            return false
+        }
+        let looseTabRowCount = context.space.sidebar.section(.current).rows
+            .count { $0.kind == .tab && $0.parentFolderID == nil }
+        return looseTabRowCount >= OnDeviceTabTidyingService.minimumLooseTabCount
     }
 
     /// Whether the current section holds a tab, at its top level or in one of
@@ -60,6 +79,32 @@ private struct BrowserCurrentTabsSeam: View {
         guard !current.holdsTabRows else { return true }
         guard !current.isEmpty else { return false }
         return current.rows.contains { $0.kind.opensList && !space.tabIDs(inFolder: $0.id).isEmpty }
+    }
+}
+
+/// Keeps Tidy's word table in step with the setting, and has the shown Space's
+/// loose tabs described in the background once there are enough of them. It
+/// reads every loose tab's title and address, so it sits apart from the seam,
+/// and a page changing its title redraws only this.
+private struct BrowserTidyBackgroundWork: View {
+    let context: BrowserSidebarListContext
+
+    var body: some View {
+        let isTidyEnabled =
+            BrowserAppPreferenceStore.shared.offersTabTidying && OnDeviceTabTidyingService.isModelAvailable
+        let candidates =
+            isTidyEnabled && !context.spaceAccess.isLocked(context.space)
+            ? OnDeviceTabTidyingService.candidates(in: context.space) : []
+        let describedCandidates =
+            candidates.count >= OnDeviceTabTidyingService.minimumDescribedTabCount ? candidates : []
+        Color.clear
+            .task(id: isTidyEnabled) {
+                if !isTidyEnabled { TidyTabDescriptions.shared.forgetAll() }
+                await TidyModelDownloads.shared.sync(isTidyEnabled: isTidyEnabled)
+            }
+            .task(id: describedCandidates.map(\.modelDescription)) {
+                TidyTabDescriptions.shared.describe(describedCandidates)
+            }
     }
 }
 

@@ -14,7 +14,7 @@ public sealed partial class BrowserTabCollection {
 
     #region Actions - Organization
 
-    public void AddFolder(Guid id, string name, TabPlacement? location = null, Guid? parent = null) {
+    public void AddFolder(Guid id, string name, TabPlacement? location = null, Guid? parent = null, bool isTidyHeader = false) {
         var tree = new FolderTree(folders);
         if (folders.Count >= FolderTree.MaximumCount) throw new Rejected(new FolderLimitReached(FolderTree.MaximumCount));
         if (folders.Any(f => f.Id == id)) throw new Rejected(new FolderAlreadyExists(id));
@@ -26,7 +26,7 @@ public sealed partial class BrowserTabCollection {
             if (tree.Depth(p) + 1 >= FolderTree.MaximumDepth) throw new Rejected(new FolderDepthLimitReached(FolderTree.MaximumDepth));
             var subtree = tree.Subtree(p); insertion = folders.FindLastIndex(f => subtree.Contains(f.Id)) + 1;
         }
-        folders.Insert(insertion, new(id, location, FolderName(name), ParentId: parent));
+        folders.Insert(insertion, new(id, location, FolderName(name), ParentId: parent, IsTidyHeader: isTidyHeader));
     }
 
     public void RenameFolder(Guid id, string name) {
