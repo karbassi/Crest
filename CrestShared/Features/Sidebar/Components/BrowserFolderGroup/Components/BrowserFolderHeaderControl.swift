@@ -111,10 +111,11 @@ private struct BrowserTidyHeaderRow: View {
             .accessibilityLabel("\(folder.shownTitle) header")
             .accessibilityValue(BrowserChromeAccessibility.folderValue(isExpanded: isExpanded))
             .accessibilityHint(isExpanded ? "Collapses this header" : "Expands this header")
+            // The close button shows only on hover with a pointer, so the
+            // header carries its action for VoiceOver and Full Keyboard Access.
+            .accessibilityAction(named: "Close \(folder.shownTitle)", closeHeader)
 
-            Button {
-                _ = configuration.context.tabActions.closeTidyHeader(folder.id)
-            } label: {
+            Button(action: closeHeader) {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -127,6 +128,10 @@ private struct BrowserTidyHeaderRow: View {
         }
         .browserSavedFolderHeaderLayout(configuration: configuration)
         .onHover { isHovering = $0 }
+    }
+
+    private func closeHeader() {
+        _ = configuration.context.tabActions.closeTidyHeader(folder.id)
     }
 
     private var showsCloseButton: Bool {

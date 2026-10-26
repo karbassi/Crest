@@ -56,18 +56,17 @@ private struct BrowserCurrentTabsSeam: View {
     }
 
     /// Whether the person turned Tidy on, the on-device model can run, its word
-    /// table is ready, and the current section's top level holds enough tabs
-    /// to be worth tidying. Counted from the outline's rows, so a page changing
-    /// its title never redraws the seam.
+    /// table is ready, and the current section's top level holds enough web
+    /// pages to be worth tidying. Counted without reading titles, so a page
+    /// changing its title never redraws the seam.
     private var canTidy: Bool {
         guard BrowserAppPreferenceStore.shared.offersTabTidying, OnDeviceTabTidyingService.isModelAvailable,
             TidyModelDownloads.shared.embedder != nil
         else {
             return false
         }
-        let looseTabRowCount = context.space.sidebar.section(.current).rows
-            .count { $0.kind == .tab && $0.parentFolderID == nil }
-        return looseTabRowCount >= OnDeviceTabTidyingService.minimumLooseTabCount
+        return OnDeviceTabTidyingService.candidateCount(in: context.space)
+            >= OnDeviceTabTidyingService.minimumLooseTabCount
     }
 
     /// Whether the current section holds a tab, at its top level or in one of

@@ -80,11 +80,25 @@ struct OnDeviceTabTidyingService {
     /// page, in sidebar order.
     @MainActor
     static func candidates(in space: SpaceModel) -> [TidyTabCandidate] {
+        looseWebPageTabs(in: space).compactMap { tab, address in
+            TidyTabCandidate(tabID: tab.id, pageTitle: tab.title, address: address)
+        }
+    }
+
+    /// How many tabs `candidates(in:)` would return, read without their
+    /// titles, so a page changing its title doesn't redraw whoever asks.
+    @MainActor
+    static func candidateCount(in space: SpaceModel) -> Int {
+        looseWebPageTabs(in: space).count
+    }
+
+    @MainActor
+    private static func looseWebPageTabs(in space: SpaceModel) -> [(tab: TabStateModel, address: URL)] {
         space.tabs.models.compactMap { tab in
             guard tab.placement == .current, tab.folderID == nil, tab.splitGroupID == nil,
-                let address = tab.url.flatMap(URL.init(string:))
+                let address = tab.url.flatMap(URL.init(string:)), address.host() != nil
             else { return nil }
-            return TidyTabCandidate(tabID: tab.id, pageTitle: tab.title, address: address)
+            return (tab, address)
         }
     }
 
@@ -205,9 +219,9 @@ struct OnDeviceTabTidyingService {
         }.sorted { $0.similarity > $1.similarity }
         var matched = groups.map { _ in "" }
         var usedNames: Set<Int> = []
-        for match in matches where !usedNames.contains(match.name) {
+        for match in matches where !usedNames.contains(match.name) && matched[match.group].isEmpty {
             usedNames.insert(match.name)
-            if matched[match.group].isEmpty { matched[match.group] = names[match.name] }
+            matched[match.group] = names[match.name]
         }
         let unnamed = groups.indices.filter { matched[$0].isEmpty }
         guard !isRetry, !unnamed.isEmpty else { return matched }

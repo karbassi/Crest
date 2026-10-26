@@ -33,6 +33,9 @@ final class TidyTabDescriptions {
     private var describedOrder: [String] = []
     private var waiting: [TidyTabCandidate] = []
     private var worker: Task<Void, Never>?
+    /// Which worker `worker` holds, so one that was cancelled leaves a newer
+    /// one's handle alone when it ends.
+    private var workerID: UUID?
     private var pauseCount = 0
 
     // MARK: - Actions - Reading
@@ -79,6 +82,8 @@ final class TidyTabDescriptions {
 
     private func startWorkingIfIdle() {
         guard worker == nil, pauseCount == 0, !waiting.isEmpty else { return }
+        let workerID = UUID()
+        self.workerID = workerID
         worker = Task { [weak self] in
             while let self, !Task.isCancelled, self.pauseCount == 0, !self.waiting.isEmpty {
                 let candidate = self.waiting.removeFirst()
@@ -87,7 +92,8 @@ final class TidyTabDescriptions {
                 guard !Task.isCancelled else { break }
                 self.remember(keyphrases, for: candidate.modelDescription)
             }
-            self?.worker = nil
+            // `forgetAll` may have started a newer worker meanwhile; leave it.
+            if self?.workerID == workerID { self?.worker = nil }
         }
     }
 

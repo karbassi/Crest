@@ -4593,6 +4593,10 @@
     "sidebar-tidy-open-tabs": {
       "category": "new",
       "message": "Turn on Tidy in Tabs settings to group your open tabs under a header for each topic in about a second. It runs on Apple Intelligence on your device, and you can close a whole header at once."
+    },
+    "sidebar-tidy-review-fixes": {
+      "category": "internal",
+      "message": "Tidy's header close action works with VoiceOver and Full Keyboard Access, the Tidy button counts only tabs that show a web page, every group keeps a name when the model skips one, and turning Tidy off during its download or keyphrase work leaves no stale state."
     }
   }
 }

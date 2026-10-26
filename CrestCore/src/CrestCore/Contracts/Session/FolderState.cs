@@ -8,7 +8,9 @@ namespace CrestCore.Contracts;
 /// <see cref="Symbol"/> and <see cref="Color"/> are null until someone chooses them.
 /// <see cref="OrderAnchorTabId"/> is the tab an empty folder keeps its place before.
 /// <see cref="IsTidyHeader"/> marks a folder Tidy made in the open section, which the
-/// sidebar draws as a plain header and which stays on the device that made it.
+/// sidebar draws as a plain header with a close button. The mark stays on the device
+/// that made it: sync carries the folder, and other devices show it as an ordinary
+/// folder, which they close or delete like any other.
 /// </summary>
 [Observed]
 public sealed record FolderState(

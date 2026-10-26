@@ -49,6 +49,9 @@ final class TidyModelDownloads {
     private(set) var isDownloading = false
     /// The last download or load failed. Turning Tidy off and on again retries.
     private(set) var didFail = false
+    /// Counts downloads started and Tidy turned off, so a download that Tidy
+    /// was turned off during sets nothing when it finishes.
+    private var syncCount = 0
 
     private var directory: URL? {
         try? FileManager.default.url(
@@ -64,23 +67,30 @@ final class TidyModelDownloads {
     /// is off. Safe to call repeatedly; files already verified are reused.
     func sync(isTidyEnabled: Bool) async {
         guard isTidyEnabled else {
+            syncCount += 1
             embedder = nil
             didFail = false
+            isDownloading = false
             if let directory { try? FileManager.default.removeItem(at: directory) }
             return
         }
         guard embedder == nil, !isDownloading, let directory else { return }
+        syncCount += 1
+        let call = syncCount
         isDownloading = true
-        defer { isDownloading = false }
+        defer { if call == syncCount { isDownloading = false } }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let vocabularyURL = try await Self.verifiedFile(Self.vocabulary, in: directory)
             let matrixURL = try await Self.verifiedFile(Self.matrix, in: directory)
-            embedder = try await Task.detached(priority: .utility) {
+            let loaded = try await Task.detached(priority: .utility) {
                 try TidyTabEmbedder(vocabularyURL: vocabularyURL, matrixURL: matrixURL)
             }.value
+            guard call == syncCount else { return }
+            embedder = loaded
             didFail = false
         } catch {
+            guard call == syncCount else { return }
             didFail = true
             Self.logger.error("Tidy couldn't get its word table: \(String(describing: error))")
         }
