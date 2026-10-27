@@ -31,6 +31,30 @@ public sealed partial class BrowserContractsTests {
     }
 
     [Fact]
+    public void TidyingAgainFilesTabsUnderTheTidyHeaderOfTheSameName() {
+        var f = new BatchSpace();
+        using var device = new TestDevice(f.Session);
+        var core = device.Authority;
+        var window = device.Open(f.Space, (f.Space, f.Open));
+        device.Send(new TidyCurrentTabs(device.Workspace, f.Space, [new("Reading", [f.Open, f.Last])]));
+        var header = Assert.Single(core.Current.Spaces[0].Folders, folder => folder.IsTidyHeader);
+        device.Send(new CollapseFolder(device.Workspace, f.Space, header.Id, true));
+        Guid[] later = [Guid.NewGuid(), Guid.NewGuid()];
+        foreach (var tab in later)
+            device.Send(new OpenTab(device.Workspace, window, f.Space, tab, new TabContent("https://example.org/", null, "Later"),
+                TabPlacement.Current, null, false));
+
+        device.Send(new TidyCurrentTabs(device.Workspace, f.Space, [new("reading", later)]));
+
+        var space = core.Current.Spaces[0];
+        var joined = Assert.Single(space.Folders, folder => folder.IsTidyHeader);
+        Assert.Equal((header.Id, "Reading", false), (joined.Id, joined.Title, joined.IsCollapsed));
+        Guid[] filed = [.. space.Tabs.Where(tab => tab.FolderId == header.Id).Select(tab => tab.Id)];
+        Assert.Equal([f.Open, f.Last], filed[..2]);
+        Assert.Equal(later.ToHashSet(), filed[2..].ToHashSet());
+    }
+
+    [Fact]
     public void ClosingATidyHeaderArchivesItsTabsAndRemovesIt() {
         var f = new BatchSpace();
         using var device = new TestDevice(f.Session);

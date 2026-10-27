@@ -52,14 +52,15 @@ struct BrowserNewTabSettingsSection: View {
 }
 
 /// Whether the sidebar offers Tidy, and where its model runs. Off by default,
-/// and unavailable where Apple Intelligence is not.
+/// and can't be turned on where Apple Intelligence is unavailable, though it
+/// can always be turned off, which deletes its word list.
 struct BrowserTabTidyingSettingsSection: View {
     @Bindable var preferences: BrowserAppPreferenceStore
 
     var body: some View {
         Section {
             Toggle("Offer Tidy for open tabs", isOn: $preferences.offersTabTidying)
-                .disabled(!OnDeviceTabTidyingService.isModelAvailable)
+                .disabled(!OnDeviceTabTidyingService.isModelAvailable && !preferences.offersTabTidying)
                 .accessibilityIdentifier("offer-tab-tidying-toggle")
         } header: {
             Text("Tidy")

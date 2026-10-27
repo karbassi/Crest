@@ -45,14 +45,21 @@ struct OnDeviceTabTidyingService {
             + "|.* news|general news|weather|sports?)$",
         options: [.caseInsensitive])
     private static let runTogetherNames = try! NSRegularExpression(
-        pattern: "[,;|]\\s*(?=(?:group\\s*)?\\d+\\s*[:.)])", options: [.caseInsensitive])
+        pattern: "[,;|]\\s*(?=(?:group\\s*)?\\d+\\s*[:.)\u{FF1A}])", options: [.caseInsensitive])
     private static let echoedGroupLabel = try! NSRegularExpression(
-        pattern: "^\\s*group\\s*\\d+\\s*[:.)\\-]\\s*", options: [.caseInsensitive])
+        pattern: "^\\s*group\\s*\\d+\\s*[:.)\\-\u{FF1A}]\\s*", options: [.caseInsensitive])
+    /// A numbered line, maybe labeled "Group", in Markdown bold, or with a
+    /// full-width colon, period or a dash after the number.
     private static let nameLine = try! NSRegularExpression(
-        pattern: "^\\s*(?:group\\s*)?(\\d+)\\s*[:.)\\-\u{2013}]\\s*(.+?)\\s*$", options: [.caseInsensitive])
+        pattern: "^[\\s*#]*(group\\s*)?(\\d+)\\s*[:.)\\-\u{2013}\u{2014}\u{FF1A}\u{FF0E}]\\s*(.+?)\\s*$",
+        options: [.caseInsensitive])
 
     /// Always pick the likeliest answer, so the same tabs tidy the same way.
     private static let options = GenerationOptions(sampling: .greedy)
+
+    /// The most of a title the naming prompt shows, so a Space of long titles
+    /// still fits the model's context.
+    private static let maximumNamedTitleLength = 80
 
     /// Naming reads tab titles as data to transform, which the default
     /// guardrails sometimes refuse.
@@ -178,34 +185,50 @@ struct OnDeviceTabTidyingService {
     // MARK: - Actions - Naming
 
     /// A name for each group, from a plain-text call that sees each group's
-    /// six most typical titles and hosts. When the model leaves groups out it
-    /// renumbers the rest, so each of its names then goes to the group whose
-    /// meaning vector in `groupVectors` it matches best, and the groups left
-    /// unnamed get one more call. A group still without a name gets "".
+    /// six most typical titles and hosts. A name goes to the group its number
+    /// gives only when every group's number has one; otherwise the model left
+    /// groups out or renumbered them, so each of its names goes to the group
+    /// whose meaning vector in `groupVectors` it matches best, and the groups
+    /// left unnamed get one more call. A group still without a name gets "".
     private static func names(
         for groups: [[TidyTabCandidate]], meaning groupVectors: [[Float]], embedder: TidyTabEmbedder,
         isRetry: Bool = false
     ) async throws -> [String] {
         let prompt = groups.enumerated().map { number, group in
-            "Group \(number + 1): " + group.prefix(6).map { "\($0.cleanedTitle) (\($0.host))" }.joined(separator: "; ")
+            "Group \(number + 1): "
+                + group.prefix(6).map { "\($0.cleanedTitle.prefix(maximumNamedTitleLength)) (\($0.host))" }
+                .joined(separator: "; ")
         }.joined(separator: "\n")
+        // A few words a line, with room to spare: a cap that cut a name short
+        // would leave its group unnamed.
+        let namingOptions = GenerationOptions(sampling: .greedy, maximumResponseTokens: 64 + 24 * groups.count)
         let text = try await LanguageModelSession(model: namingModel, instructions: namingInstructions)
-            .respond(to: prompt, options: options).content
+            .respond(to: prompt, options: namingOptions).content
         let lines = runTogetherNames.stringByReplacingMatches(
             in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "\n")
+        // A line labeled "Group N" names group N; otherwise the first line for
+        // a number does. A later one is a numbered tab the model echoed.
         var namesByNumber: [Int: String] = [:]
+        var labeledNamesByNumber: [Int: String] = [:]
         for line in lines.split(whereSeparator: \.isNewline).map(String.init) {
             guard let match = nameLine.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-                let numberRange = Range(match.range(at: 1), in: line), let number = Int(line[numberRange]),
-                let nameRange = Range(match.range(at: 2), in: line)
+                let numberRange = Range(match.range(at: 2), in: line), let number = Int(line[numberRange]),
+                let nameRange = Range(match.range(at: 3), in: line)
             else { continue }
             let named = String(line[nameRange])
             let unlabeled = echoedGroupLabel.stringByReplacingMatches(
                 in: named, range: NSRange(named.startIndex..., in: named), withTemplate: "")
-            namesByNumber[number] = String(unlabeled.prefix { !":,(;".contains($0) })
+            let name = String(unlabeled.prefix { !":,(;\u{FF1A}\u{FF0C}\u{FF08}\u{FF1B}".contains($0) })
                 .trimmingCharacters(in: CharacterSet(charactersIn: "\"*. "))
+            if namesByNumber[number] == nil { namesByNumber[number] = name }
+            if match.range(at: 1).location != NSNotFound, labeledNamesByNumber[number] == nil {
+                labeledNamesByNumber[number] = name
+            }
         }
-        guard namesByNumber.count < groups.count else { return groups.indices.map { namesByNumber[$0 + 1] ?? "" } }
+        namesByNumber.merge(labeledNamesByNumber) { _, labeled in labeled }
+        guard !groups.indices.allSatisfy({ namesByNumber[$0 + 1] != nil }) else {
+            return groups.indices.map { namesByNumber[$0 + 1] ?? "" }
+        }
 
         let names = namesByNumber.sorted { $0.key < $1.key }.map(\.value)
         let matches = names.indices.flatMap { nameIndex in

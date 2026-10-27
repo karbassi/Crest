@@ -85,21 +85,32 @@ private struct BrowserCurrentTabsSeam: View {
 /// loose tabs described in the background once there are enough of them. It
 /// reads every loose tab's title and address, so it sits apart from the seam,
 /// and a page changing its title redraws only this.
+///
+/// While Apple Intelligence is unavailable Tidy only pauses: describing stops,
+/// and the table and the keyphrases stay until the person turns Tidy off.
 private struct BrowserTidyBackgroundWork: View {
     let context: BrowserSidebarListContext
 
     var body: some View {
-        let isTidyEnabled =
-            BrowserAppPreferenceStore.shared.offersTabTidying && OnDeviceTabTidyingService.isModelAvailable
+        let offersTidy = BrowserAppPreferenceStore.shared.offersTabTidying
+        let isTidyEnabled = offersTidy && OnDeviceTabTidyingService.isModelAvailable
         let candidates =
             isTidyEnabled && !context.spaceAccess.isLocked(context.space)
             ? OnDeviceTabTidyingService.candidates(in: context.space) : []
         let describedCandidates =
             candidates.count >= OnDeviceTabTidyingService.minimumDescribedTabCount ? candidates : []
         Color.clear
+            .task(id: offersTidy) {
+                guard !offersTidy else { return }
+                TidyTabDescriptions.shared.forgetAll()
+                await TidyModelDownloads.shared.sync(isTidyEnabled: false)
+            }
             .task(id: isTidyEnabled) {
-                if !isTidyEnabled { TidyTabDescriptions.shared.forgetAll() }
-                await TidyModelDownloads.shared.sync(isTidyEnabled: isTidyEnabled)
+                guard isTidyEnabled else {
+                    TidyTabDescriptions.shared.stopDescribing()
+                    return
+                }
+                await TidyModelDownloads.shared.sync(isTidyEnabled: true)
             }
             .task(id: describedCandidates.map(\.modelDescription)) {
                 TidyTabDescriptions.shared.describe(describedCandidates)

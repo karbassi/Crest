@@ -3330,12 +3330,12 @@
     "Claude Code" : {
 
     },
-    "clean tidy archive unpinned tabs" : {
+    "clean archive unpinned tabs" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "تنظيف ترتيب أرشفة علامات التبويب غير المثبتة"
+            "value" : "تنظيف أرشفة علامات التبويب غير المثبتة"
           }
         }
       }

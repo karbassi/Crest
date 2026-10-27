@@ -19,6 +19,9 @@ final class TidyTabDescriptions {
     private static let maximumCachedDescriptions = 1000
     private static let maximumKeyphrases = 5
 
+    /// Five short lines with room to spare, which stops a runaway answer.
+    private static let options = GenerationOptions(sampling: .greedy, maximumResponseTokens: 128)
+
     private static let instructions = """
         You describe one open browser tab in five short keyphrases: what the person is working on, shopping \
         for or reading about, from specific to broad, ending with the broad project or subject it belongs to. \
@@ -68,12 +71,18 @@ final class TidyTabDescriptions {
         return try await body()
     }
 
-    /// Drops every description and stops describing, as when history is
-    /// cleared or Tidy is turned off.
-    func forgetAll() {
+    /// Stops describing and drops the tabs waiting for it, keeping the
+    /// keyphrases already written, as while Apple Intelligence is unavailable.
+    func stopDescribing() {
         worker?.cancel()
         worker = nil
         waiting = []
+    }
+
+    /// Drops every description and stops describing, as when history is
+    /// cleared or Tidy is turned off.
+    func forgetAll() {
+        stopDescribing()
         keyphrasesByDescription = [:]
         describedOrder = []
     }
@@ -90,6 +99,12 @@ final class TidyTabDescriptions {
                 guard self.keyphrasesByDescription[candidate.modelDescription] == nil else { continue }
                 let keyphrases = await Self.keyphrases(describing: candidate)
                 guard !Task.isCancelled else { break }
+                // The model is busy or not ready: stop, and start with this
+                // tab on the next request.
+                guard let keyphrases else {
+                    self.waiting.insert(candidate, at: 0)
+                    break
+                }
                 self.remember(keyphrases, for: candidate.modelDescription)
             }
             // `forgetAll` may have started a newer worker meanwhile; leave it.
@@ -105,18 +120,34 @@ final class TidyTabDescriptions {
         }
     }
 
-    /// Up to five keyphrases for `candidate`, or none when the model declines,
-    /// which leaves Tidy to read the tab's cleaned title instead.
-    private static func keyphrases(describing candidate: TidyTabCandidate) async -> [String] {
+    /// Up to five keyphrases for `candidate`; none when the model declines,
+    /// which leaves Tidy to read the tab's cleaned title instead; or nil when
+    /// the model is busy or not ready, so the tab is described later.
+    private static func keyphrases(describing candidate: TidyTabCandidate) async -> [String]? {
         do {
             let text = try await LanguageModelSession(
                 model: SystemLanguageModel(guardrails: .permissiveContentTransformations), instructions: instructions
             )
-            .respond(to: candidate.modelDescription, options: GenerationOptions(sampling: .greedy)).content
+            .respond(to: candidate.modelDescription, options: options).content
             return cleanedKeyphrases(text.split(whereSeparator: \.isNewline).map(String.init))
         } catch {
             logger.error("Tidy couldn't describe a tab: \(String(describing: error))")
-            return []
+            return isTemporary(error) ? nil : []
+        }
+    }
+
+    /// Whether `error` says the model is busy, rate limited or not ready, rather
+    /// than that it declines this tab.
+    private static func isTemporary(_ error: any Error) -> Bool {
+        if #available(iOS 27, macOS 27, visionOS 27, *) {
+            if case .rateLimited? = error as? LanguageModelError { return true }
+            if case .timeout? = error as? LanguageModelError { return true }
+            if case .assetsUnavailable? = error as? SystemLanguageModel.Error { return true }
+            if case .concurrentRequests? = error as? LanguageModelSession.Error { return true }
+        }
+        switch error as? LanguageModelSession.GenerationError {
+        case .rateLimited?, .concurrentRequests?, .assetsUnavailable?: return true
+        default: return false
         }
     }
 

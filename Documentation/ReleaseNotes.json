@@ -4597,6 +4597,10 @@
     "sidebar-tidy-review-fixes": {
       "category": "internal",
       "message": "Tidy's header close action works with VoiceOver and Full Keyboard Access, the Tidy button counts only tabs that show a web page, every group keeps a name when the model skips one, and turning Tidy off during its download or keyphrase work leaves no stale state."
+    },
+    "sidebar-tidy-pause-and-rerun-fixes": {
+      "category": "internal",
+      "message": "Tidy keeps its word list and keyphrases while Apple Intelligence is briefly unavailable and can be turned off meanwhile, names each group correctly when the model numbers or formats its answer oddly, keeps long titles and answers within the model's limits, describes a tab again when the model was busy, and files tabs under an existing Tidy header of the same name. Searching the command palette for \"tidy\" no longer offers Clear Unpinned Tabs."
     }
   }
 }

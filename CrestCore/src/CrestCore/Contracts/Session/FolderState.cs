@@ -50,10 +50,10 @@ public sealed record FolderState(
 
     #endregion
 
-    #region Actions - Imports
+    #region Actions - Matching
 
-    /// The key an imported folder matches an existing one by: its letters and
-    /// digits in compatibility form, lowercased.
+    /// The key an imported folder, or a header Tidy names, matches an existing
+    /// one by: its letters and digits in compatibility form, lowercased.
     internal static string MatchKey(string title) => string.Concat(title.Normalize(NormalizationForm.FormKD)
         .Where(char.IsLetterOrDigit)).ToLowerInvariant();
 

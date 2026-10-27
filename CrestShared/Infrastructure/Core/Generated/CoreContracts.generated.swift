@@ -18157,7 +18157,7 @@ struct ShortcutCommand: Hashable, Sendable {
         name: "clearUnpinnedTabs",
         section: ShortcutSection.tabs,
         title: LocalizedStringResource("Clear Unpinned Tabs"),
-        searchTerms: LocalizedStringResource("clean tidy archive unpinned tabs"),
+        searchTerms: LocalizedStringResource("clean archive unpinned tabs"),
         menuTitle: nil,
         symbol: "sparkles",
         requiredCapability: nil,

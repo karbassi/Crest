@@ -11,7 +11,9 @@ public sealed record TidyFolderProposal(string FolderTitle, IReadOnlyList<Guid> 
 #endregion
 
 /// Files a Space's open tabs under the headers Tidy proposes, in one edit: each
-/// header is made in the open section with its tabs. Only an open tab outside
+/// header is made in the open section with its tabs, unless a Tidy header at
+/// the open section's top level already has its name, which then takes the
+/// tabs after its own and opens if it was collapsed. Only an open tab outside
 /// every folder and split may be filed, each under at most one header. Refused
 /// with `TabCannotBeTidied` for any other tab and `TidyFolderNeedsTwoTabs` for
 /// a header of fewer than two, and then nothing changes.
@@ -22,10 +24,21 @@ public sealed record TidyCurrentTabs(Guid WorkspaceId, Guid SpaceId, IReadOnlyLi
     internal override SessionEdit? Edit(NativeSessionAuthority workspace, SessionTurn turn) =>
         workspace.Organizing(turn.Basis, SpaceId, SyncStaging.Creation, edited => {
             RequireTidyableTabs(edited);
+            var headersByName = edited.Folders
+                .Where(folder => folder.IsTidyHeader && folder.Location == TabPlacement.Current && folder.ParentId is null)
+                .GroupBy(folder => FolderState.MatchKey(folder.Title))
+                .Where(named => named.Key.Length > 0)
+                .ToDictionary(named => named.Key, named => named.First().Id);
             foreach (var folder in Folders) {
-                var folderId = turn.Ids.Next();
-                edited.AddFolder(folderId, NativeSessionAuthority.FolderTitle(folder.FolderTitle), TabPlacement.Current,
-                    isTidyHeader: true);
+                var title = NativeSessionAuthority.FolderTitle(folder.FolderTitle);
+                var name = FolderState.MatchKey(title);
+                if (headersByName.TryGetValue(name, out var folderId)) {
+                    edited.CollapseFolder(folderId, collapsed: false, turn.Now);
+                } else {
+                    folderId = turn.Ids.Next();
+                    edited.AddFolder(folderId, title, TabPlacement.Current, isTidyHeader: true);
+                    if (name.Length > 0) headersByName[name] = folderId;
+                }
                 edited.FileTabs(folder.TabIds, TabPlacement.Current, folderId, turn.Now);
             }
         });
