@@ -37,12 +37,13 @@ struct OnDeviceTabTidyingService {
     /// check's answer for a tab that fits no name.
     private static let noTopic = "none"
 
-    /// Group names that are kinds of browsing rather than topics, whose groups
-    /// stay loose.
+    /// Group names that are kinds of browsing or catch-alls rather than topics,
+    /// whose groups stay loose.
     private static let looseGroupName = try! NSRegularExpression(
         pattern:
-            "^(none|e-?mail|mail|inbox|email inbox|calendars?|chat|communication|social( media)?|music|video|news"
-            + "|.* news|general news|weather|sports?)$",
+            "^(none|e-?mails?|mail|inbox|email inbox|calendars?|chat|messages?|messaging|communication"
+            + "|social( media)?|music|videos?|news|.* news|general news|weather|sports?"
+            + "|misc(ellaneous)?|others?|general|various|uncategori[sz]ed|browsing|websites?)$",
         options: [.caseInsensitive])
     private static let runTogetherNames = try! NSRegularExpression(
         pattern: "[,;|]\\s*(?=(?:group\\s*)?\\d+\\s*[:.)\u{FF1A}])", options: [.caseInsensitive])
@@ -60,6 +61,9 @@ struct OnDeviceTabTidyingService {
     /// The most of a title the naming prompt shows, so a Space of long titles
     /// still fits the model's context.
     private static let maximumNamedTitleLength = 80
+
+    /// The longest header name Tidy proposes, well inside the core's limit.
+    private static let maximumHeaderNameLength = 40
 
     /// Naming reads tab titles as data to transform, which the default
     /// guardrails sometimes refuse.
@@ -128,7 +132,13 @@ struct OnDeviceTabTidyingService {
         guard let embedder = TidyModelDownloads.shared.embedder else { throw TidyWordTableUnavailable() }
         let descriptions = TidyTabDescriptions.shared
         return try await descriptions.pausing {
-            let groupable = candidates.filter { !$0.isLooseSiteFrontPage }
+            // Copies of one page group as one, so they never make a header of
+            // their own, and join their page's header together.
+            let copiesByDescription = Dictionary(grouping: candidates, by: \.modelDescription)
+            var seenDescriptions: Set<String> = []
+            let groupable = candidates.filter {
+                !$0.isLooseSiteFrontPage && seenDescriptions.insert($0.modelDescription).inserted
+            }
             let vectors = groupable.map { candidate in
                 let keyphrases = descriptions.keyphrases(for: candidate) ?? []
                 return embedder.vector(
@@ -148,7 +158,8 @@ struct OnDeviceTabTidyingService {
             if candidates.count <= Self.maximumVerifiedTabCount {
                 (groups, names) = await Self.verified(groups, names: names)
             }
-            return Self.proposals(groups: groups, names: names, inOrderOf: candidates)
+            return Self.proposals(
+                groups: groups, names: names, copies: copiesByDescription, inOrderOf: candidates)
         }
     }
 
@@ -158,22 +169,32 @@ struct OnDeviceTabTidyingService {
         group.allSatisfy { $0.pathDepth <= 1 } && Set(group.map(\.host)).count == group.count
     }
 
+    /// `name` cut at a word to `maximumHeaderNameLength`, or at that length
+    /// when no space is in reach. The model writes a few words, but not always.
+    private static func fittedName(_ name: String) -> String {
+        guard name.count > maximumHeaderNameLength else { return name }
+        let cut = name.prefix(maximumHeaderNameLength)
+        guard let space = cut.lastIndex(of: " ") else { return String(cut) }
+        return String(cut[..<space])
+    }
+
     private static func isTopic(_ name: String) -> Bool {
         name.contains(where: \.isLetter) && name.lowercased() != noTopic
             && looseGroupName.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) == nil
     }
 
     /// One header per topic name, merging groups the model named alike, with
-    /// their tabs in sidebar order.
+    /// their tabs and those tabs' `copies` in sidebar order.
     private static func proposals(
-        groups: [[TidyTabCandidate]], names: [String], inOrderOf candidates: [TidyTabCandidate]
+        groups: [[TidyTabCandidate]], names: [String], copies: [String: [TidyTabCandidate]],
+        inOrderOf candidates: [TidyTabCandidate]
     ) -> [TidyFolderProposal] {
         var namesInOrder: [String] = []
         var tabIDsByName: [String: Set<UUID>] = [:]
-        for (group, name) in zip(groups, names) where isTopic(name) {
+        for (group, name) in zip(groups, names.map(fittedName)) where isTopic(name) {
             let key = name.lowercased()
             if tabIDsByName[key] == nil { namesInOrder.append(name) }
-            tabIDsByName[key, default: []].formUnion(group.map(\.tabID))
+            tabIDsByName[key, default: []].formUnion(group.flatMap { copies[$0.modelDescription] ?? [$0] }.map(\.tabID))
         }
         return namesInOrder.compactMap { name in
             let members = tabIDsByName[name.lowercased()] ?? []

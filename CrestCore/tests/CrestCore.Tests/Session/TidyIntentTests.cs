@@ -73,4 +73,19 @@ public sealed partial class BrowserContractsTests {
         Assert.DoesNotContain(space.Tabs, tab => tab.Id == f.Open || tab.Id == f.Last);
         Assert.Contains(space.ArchivedTabs, archived => archived.Tab.Id == f.Open);
     }
+
+    [Fact]
+    public void ATidyHeaderMovedToSavedTabsBecomesAnOrdinaryFolder() {
+        var f = new BatchSpace();
+        using var device = new TestDevice(f.Session);
+        var core = device.Authority;
+        device.Send(new TidyCurrentTabs(device.Workspace, f.Space, [new("Reading", [f.Open, f.Last])]));
+        var header = Assert.Single(core.Current.Spaces[0].Folders, folder => folder.IsTidyHeader);
+
+        device.Send(new MoveFolder(device.Workspace, f.Space, header.Id, TabPlacement.Saved, null, null, null));
+
+        var moved = Assert.Single(core.Current.Spaces[0].Folders, folder => folder.Id == header.Id);
+        Assert.Same(TabPlacement.Saved, moved.Location);
+        Assert.False(moved.IsTidyHeader);
+    }
 }

@@ -87,7 +87,9 @@ private struct BrowserCurrentTabsSeam: View {
 /// and a page changing its title redraws only this.
 ///
 /// While Apple Intelligence is unavailable Tidy only pauses: describing stops,
-/// and the table and the keyphrases stay until the person turns Tidy off.
+/// and the table and the keyphrases stay until the person turns Tidy off. A
+/// private window's tabs are never described in the background, so nothing
+/// about them outlives the window; Tidy reads their titles instead.
 private struct BrowserTidyBackgroundWork: View {
     let context: BrowserSidebarListContext
 
@@ -95,7 +97,7 @@ private struct BrowserTidyBackgroundWork: View {
         let offersTidy = BrowserAppPreferenceStore.shared.offersTabTidying
         let isTidyEnabled = offersTidy && OnDeviceTabTidyingService.isModelAvailable
         let candidates =
-            isTidyEnabled && !context.spaceAccess.isLocked(context.space)
+            isTidyEnabled && !context.browser.isPrivateBrowsing && !context.spaceAccess.isLocked(context.space)
             ? OnDeviceTabTidyingService.candidates(in: context.space) : []
         let describedCandidates =
             candidates.count >= OnDeviceTabTidyingService.minimumDescribedTabCount ? candidates : []

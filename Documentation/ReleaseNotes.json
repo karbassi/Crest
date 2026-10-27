@@ -4601,6 +4601,10 @@
     "sidebar-tidy-pause-and-rerun-fixes": {
       "category": "internal",
       "message": "Tidy keeps its word list and keyphrases while Apple Intelligence is briefly unavailable and can be turned off meanwhile, names each group correctly when the model numbers or formats its answer oddly, keeps long titles and answers within the model's limits, describes a tab again when the model was busy, and files tabs under an existing Tidy header of the same name. Searching the command palette for \"tidy\" no longer offers Clear Unpinned Tabs."
+    },
+    "sidebar-tidy-copies-and-names": {
+      "category": "internal",
+      "message": "Tidy files copies of one page under that page's header, keeps header names short, leaves catch-all groups such as Miscellaneous loose, never describes a private window's tabs in the background, and a Tidy header moved to saved tabs becomes an ordinary folder."
     }
   }
 }

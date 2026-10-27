@@ -146,7 +146,8 @@ public sealed partial class BrowserTabCollection {
         var remainingTree = new FolderTree(nextFolders);
         var anchor = beforeFolder is { } target ? remainingTree.TabAnchor(target, remaining) : beforeTab;
         var predecessors = remainingTree.EmptyPredecessors(beforeFolder, anchor, parent, destination, remaining);
-        var moving = nextFolders.Where(f => movingIds.Contains(f.Id)).Select(f => f with { Location = destination, ParentId = f.Id == id ? parent : f.ParentId, OrderAnchorTabId = f.Id == id ? anchor : f.OrderAnchorTabId }).ToArray();
+        // A Tidy header that leaves the open section becomes an ordinary folder.
+        var moving = nextFolders.Where(f => movingIds.Contains(f.Id)).Select(f => f with { Location = destination, ParentId = f.Id == id ? parent : f.ParentId, OrderAnchorTabId = f.Id == id ? anchor : f.OrderAnchorTabId, IsTidyHeader = f.IsTidyHeader && destination == TabPlacement.Current }).ToArray();
         nextFolders.RemoveAll(f => movingIds.Contains(f.Id));
         int folderInsertion = beforeFolder is { } bf ? nextFolders.FindIndex(f => f.Id == bf)
             : parent is { } parentFolder ? nextFolders.FindLastIndex(f => tree.Subtree(parentFolder).Contains(f.Id)) + 1 : nextFolders.Count;
