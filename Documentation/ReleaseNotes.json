@@ -4605,6 +4605,10 @@
     "sidebar-tidy-copies-and-names": {
       "category": "internal",
       "message": "Tidy files copies of one page under that page's header, keeps header names short, leaves catch-all groups such as Miscellaneous loose, never describes a private window's tabs in the background, and a Tidy header moved to saved tabs becomes an ordinary folder."
+    },
+    "sidebar-tidy-localizable-strings": {
+      "category": "internal",
+      "message": "Tidy's settings, button, errors and header accessibility text can be translated."
     }
   }
 }
