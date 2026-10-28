@@ -4621,6 +4621,10 @@
     "sidebar-tidy-header-closes-like-tabs": {
       "category": "internal",
       "message": "Closing a Tidy header closes its tabs the way closing them does, asking first when a page wants to stay open, with the same close button as a tab; test launches no longer touch the installed app's word list, and Tidy's logs never name a tab."
+    },
+    "sidebar-tidy-open-models": {
+      "category": "new",
+      "message": "Tidy now works on Macs, iPhones and iPads without Apple Intelligence, using open models on your device. It shows the headers it found, and you apply them all at once or cancel."
     }
   }
 }

@@ -1,35 +1,35 @@
 import Foundation
 
 /// Groups tabs by their meaning vectors, with no model call: the vectors are
-/// centered on their mean, merged by average linkage over cosine distance, and
-/// cut at whichever height from 0.60 to 1.00 gives the best silhouette. Only
-/// groups of two or more tabs are kept.
+/// centered on their mean when the method asks, merged by average linkage over
+/// cosine distance, and cut at whichever of the method's heights gives the
+/// best silhouette. Only groups of two or more tabs are kept.
 struct TidyTabGroups {
-    // MARK: - Static Variables
-
-    private static let cutHeights: [Float] = stride(from: 0, through: 8, by: 1).map { 0.6 + Float($0) * 0.05 }
-
     // MARK: - Variables
 
-    /// Each tab's cosine distance to every other, after centering.
+    /// Each tab's cosine distance to every other, after any centering.
     private let distances: [[Float]]
+    private let cutHeights: [Float]
 
     // MARK: - Initializers
 
-    init(vectors: [[Float]]) {
+    init(vectors: [[Float]], centersVectors: Bool, cutHeights: [Float]) {
+        self.cutHeights = cutHeights
         guard let dimension = vectors.first?.count else {
             distances = []
             return
         }
         var mean = [Float](repeating: 0, count: dimension)
-        for vector in vectors {
-            for index in 0..<dimension { mean[index] += vector[index] / Float(vectors.count) }
+        if centersVectors {
+            for vector in vectors {
+                for index in 0..<dimension { mean[index] += vector[index] / Float(vectors.count) }
+            }
         }
-        let centered = vectors.map { vector in
+        let measured = vectors.map { vector in
             TidyTabEmbedder.unitLength((0..<dimension).map { vector[$0] - mean[$0] })
         }
-        distances = centered.map { first in
-            centered.map { second in
+        distances = measured.map { first in
+            measured.map { second in
                 min(max(1 - zip(first, second).reduce(0) { $0 + $1.0 * $1.1 }, 0), 2)
             }
         }
@@ -43,7 +43,7 @@ struct TidyTabGroups {
         guard distances.count >= 2 else { return [] }
         let merges = averageLinkageMerges()
         var best: (silhouette: Float, clusters: [[Int]])?
-        for height in Self.cutHeights {
+        for height in cutHeights {
             let clusters = clusters(from: merges, cutAt: height)
             let score = silhouette(of: clusters)
             if best == nil || score > best!.silhouette { best = (score, clusters) }

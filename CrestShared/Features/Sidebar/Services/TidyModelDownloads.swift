@@ -5,21 +5,21 @@ import Foundation
 
 /// A downloaded file's SHA-256 is not the pinned one.
 struct TidyModelDownloadMismatch: Error {
-    let fileName: String
+    let path: String
 }
 
-/// One file of the word-vector table: where it is published, at a pinned
-/// revision, and the SHA-256 it must have.
+/// One file a Tidy method needs: where it is kept in the method's folder,
+/// where it is published at a pinned revision, and the SHA-256 it must have.
 struct TidyModelFile: Sendable {
-    let fileName: String
+    let path: String
     let address: URL
     let sha256: String
 }
 
-/// The word-vector table Tidy groups tabs with, downloaded once the person
-/// turns Tidy on and deleted when they turn it off. Nothing is bundled with the
-/// app. The download is two public files from a pinned Hugging Face revision,
-/// each checked against its SHA-256; it carries nothing about the person's tabs.
+/// The models Tidy runs, downloaded once the person turns Tidy on and deleted
+/// when they turn it off. Nothing is bundled with the app. The download is the
+/// current `TidyMethod`'s public files, each checked against its SHA-256; it
+/// carries nothing about the person's tabs.
 @MainActor
 @Observable
 final class TidyModelDownloads {
@@ -27,22 +27,13 @@ final class TidyModelDownloads {
 
     static let shared = TidyModelDownloads()
 
-    /// potion-base-8M by Minish Lab, MIT licensed, at revision `bf8b056`.
-    private static let revision = "bf8b056651a2c21b8d2565580b8569da283cab23"
-    private static let vocabulary = TidyModelFile(
-        fileName: "vocab.txt",
-        address: URL(string: "https://huggingface.co/minishlab/potion-base-8M/resolve/\(revision)/vocab.txt")!,
-        sha256: "1394523a67ddd404a825428018c0582a6998bcfa044ecbcbf1f4d71adb94c61c")
-    private static let matrix = TidyModelFile(
-        fileName: "model.safetensors",
-        address: URL(string: "https://huggingface.co/minishlab/potion-base-8M/resolve/\(revision)/model.safetensors")!,
-        sha256: "f65d0f325faadc1e121c319e2faa41170d3fa07d8c89abd48ca5358d9a223de2")
-
     // MARK: - Variables
 
-    /// The loaded table, once its files are downloaded and verified. Tidy is
-    /// offered only while this is set.
-    private(set) var embedder: TidyTabEmbedder?
+    /// The loaded models, once their files are downloaded and verified. Tidy
+    /// is offered only while this is set.
+    private(set) var models: (any TidyTabModels)?
+    /// The method `models` belong to.
+    private(set) var method: TidyMethod?
     private(set) var isDownloading = false
     /// The last download or load failed. Turning Tidy off and on again retries.
     private(set) var didFail = false
@@ -50,10 +41,10 @@ final class TidyModelDownloads {
     /// was turned off during sets nothing when it finishes.
     private var syncCount = 0
 
-    /// Where the table is kept: the installed app's storage, or a named
-    /// isolated launch's own, as `BrowserTabStateArchive` keeps tab state.
-    /// Nil for any other isolated launch, so it never reads or deletes the
-    /// installed app's copy.
+    /// Where every method's files are kept: the installed app's storage, or a
+    /// named isolated launch's own, as `BrowserTabStateArchive` keeps tab
+    /// state. Nil for any other isolated launch, so it never reads or deletes
+    /// the installed app's copy.
     private var directory: URL? {
         let environment = BrowserLaunchEnvironment.current
         guard
@@ -74,56 +65,71 @@ final class TidyModelDownloads {
 
     // MARK: - Actions - Keeping in step
 
-    /// Downloads and loads the table while Tidy is on, and deletes it when Tidy
-    /// is off. Safe to call repeatedly; files already verified are reused.
+    /// Downloads and loads the current method's models while Tidy is on, and
+    /// deletes every method's files when Tidy is off. Files of a method this
+    /// device no longer runs are deleted too. Safe to call repeatedly; files
+    /// already verified are reused.
     func sync(isTidyEnabled: Bool) async {
         guard isTidyEnabled else {
             syncCount += 1
-            embedder = nil
+            models = nil
+            method = nil
             didFail = false
             isDownloading = false
             if let directory { try? FileManager.default.removeItem(at: directory) }
             return
         }
-        guard embedder == nil, !isDownloading, let directory else { return }
+        let current = TidyMethod.current
+        guard models == nil || method != current, !isDownloading, let directory else { return }
         syncCount += 1
         let call = syncCount
+        models = nil
+        method = current
         isDownloading = true
         defer { if call == syncCount { isDownloading = false } }
         do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let vocabularyURL = try await Self.verifiedFile(Self.vocabulary, in: directory)
-            let matrixURL = try await Self.verifiedFile(Self.matrix, in: directory)
-            let loaded = try await Task.detached(priority: .utility) {
-                try TidyTabEmbedder(vocabularyURL: vocabularyURL, matrixURL: matrixURL)
-            }.value
+            let folder = directory.appendingPathComponent(current.directoryName, isDirectory: true)
+            Self.removeEverything(in: directory, except: folder)
+            for file in current.files {
+                try await Self.verifyFile(file, in: folder)
+            }
+            let loaded = try await current.load(folder)
             guard call == syncCount else { return }
-            embedder = loaded
+            models = loaded
             didFail = false
         } catch {
             guard call == syncCount else { return }
             didFail = true
-            DiagnosticLog.tidy.error("Tidy couldn't get its word table: \(DiagnosticLog.describe(error))")
+            DiagnosticLog.tidy.error("Tidy couldn't get its models: \(DiagnosticLog.describe(error))")
         }
     }
 
-    /// The local copy of `file`, downloading it when the copy is missing or no
-    /// longer has the pinned SHA-256.
-    private nonisolated static func verifiedFile(_ file: TidyModelFile, in directory: URL) async throws -> URL {
-        let destination = directory.appendingPathComponent(file.fileName)
+    private nonisolated static func removeEverything(in directory: URL, except kept: URL) {
+        let contents =
+            (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        for item in contents where item.lastPathComponent != kept.lastPathComponent {
+            try? FileManager.default.removeItem(at: item)
+        }
+    }
+
+    /// Makes sure `folder` holds `file` with its pinned SHA-256, downloading
+    /// it when the copy is missing or differs.
+    private nonisolated static func verifyFile(_ file: TidyModelFile, in folder: URL) async throws {
+        let destination = folder.appendingPathComponent(file.path)
         if let existing = try? Data(contentsOf: destination, options: .alwaysMapped),
             sha256(of: existing) == file.sha256
         {
-            return destination
+            return
         }
         let (downloaded, _) = try await URLSession.shared.download(from: file.address)
         guard sha256(of: try Data(contentsOf: downloaded, options: .alwaysMapped)) == file.sha256 else {
             try? FileManager.default.removeItem(at: downloaded)
-            throw TidyModelDownloadMismatch(fileName: file.fileName)
+            throw TidyModelDownloadMismatch(path: file.path)
         }
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? FileManager.default.removeItem(at: destination)
         try FileManager.default.moveItem(at: downloaded, to: destination)
-        return destination
     }
 
     private nonisolated static func sha256(of data: Data) -> String {

@@ -14,13 +14,22 @@ struct BrowserCurrentTabsDivider: View {
     /// Whether there is anything left to clear.
     let canClear: Bool
     let clear: () -> Void
-    /// Whether the on-device model can run and enough loose tabs are open to tidy.
+    /// Whether Tidy's models are ready and enough loose tabs are open to tidy.
     var canTidy = false
-    var tidy: () async throws -> Void = {}
+    /// Makes the headers Tidy would file the tabs under.
+    var proposeTidy: () async throws -> [TidyFolderProposal] = { [] }
+    /// Files the tabs under headers made by `proposeTidy`.
+    var fileTidy: ([TidyFolderProposal]) throws -> Void = { _ in }
+    /// Shows the headers for the person to apply before filing them.
+    var asksBeforeFiling = false
+    /// The title of a tab, for showing headers before they are filed.
+    var tidyTabTitle: (UUID) -> String = { _ in "" }
     /// Readies the model when Tidy shows, so pressing it starts sooner.
     var prepareTidy: () -> Void = {}
     @State private var isTidying = false
     @State private var tidyFailed = false
+    /// Headers shown for the person to apply, while they decide.
+    @State private var proposedHeaders: [TidyFolderProposal]?
     @Environment(\.displayScale) private var displayScale
 
     private var metrics: BrowserSidebarTabListMetrics {
@@ -78,10 +87,26 @@ struct BrowserCurrentTabsDivider: View {
         .font(.caption.weight(.medium))
         .foregroundStyle(.secondary)
         .fixedSize()
-        .disabled(isTidying)
+        .disabled(isTidying || proposedHeaders != nil)
         .onAppear(perform: prepareTidy)
         .accessibilityLabel(tidyFailed ? "Couldn't Tidy Open Tabs" : "Tidy Open Tabs")
         .accessibilityHint("Groups open tabs under headers")
+        .popover(isPresented: isShowingProposedHeaders, arrowEdge: .bottom) {
+            BrowserTidyPreview(
+                headers: proposedHeaders ?? [], tabTitle: tidyTabTitle,
+                cancel: { proposedHeaders = nil },
+                apply: { applyProposedHeaders() }
+            )
+            .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    private var isShowingProposedHeaders: Binding<Bool> {
+        Binding {
+            proposedHeaders != nil
+        } set: {
+            if !$0 { proposedHeaders = nil }
+        }
     }
 
     private var clearButton: some View {
@@ -110,15 +135,34 @@ struct BrowserCurrentTabsDivider: View {
         tidyFailed = false
         Task {
             do {
-                try await tidy()
+                let headers = try await proposeTidy()
                 isTidying = false
+                if asksBeforeFiling, !headers.isEmpty {
+                    proposedHeaders = headers
+                } else {
+                    try fileTidy(headers)
+                }
             } catch {
                 isTidying = false
-                tidyFailed = true
-                try? await Task.sleep(for: .seconds(4))
-                tidyFailed = false
+                await showTidyFailure()
             }
         }
+    }
+
+    private func applyProposedHeaders() {
+        guard let headers = proposedHeaders else { return }
+        proposedHeaders = nil
+        do {
+            try fileTidy(headers)
+        } catch {
+            Task { await showTidyFailure() }
+        }
+    }
+
+    private func showTidyFailure() async {
+        tidyFailed = true
+        try? await Task.sleep(for: .seconds(4))
+        tidyFailed = false
     }
 
     private var touchSpacing: CGFloat {
@@ -134,9 +178,10 @@ struct BrowserCurrentTabsDivider: View {
         !revealsOnHoverOnly || (showsClearAction && canClear)
     }
 
-    /// Tidy shows where Clear does, and stays while it works or reports a failure.
+    /// Tidy shows where Clear does, and stays while it works, shows its
+    /// headers, or reports a failure.
     private var showsTidyButton: Bool {
-        isTidying || tidyFailed || (canTidy && (!revealsOnHoverOnly || showsClearAction))
+        isTidying || tidyFailed || proposedHeaders != nil || (canTidy && (!revealsOnHoverOnly || showsClearAction))
     }
 
     private var revealsOnHoverOnly: Bool {

@@ -85,13 +85,12 @@ struct BrowserSidebarTabActions {
         return true
     }
 
-    /// Files the Space's loose open tabs under headers with the on-device
-    /// model. Throws when the Space stops being the selected, unlocked one,
-    /// when the model fails, or when the core refuses the headers because the
-    /// tabs changed while they were being made. Does nothing when Tidy was
-    /// turned off or Apple Intelligence became unavailable meanwhile, and a
-    /// tab whose page changed meanwhile stays loose.
-    func tidyCurrentTabs() async throws {
+    /// The headers Tidy would file the Space's loose open tabs under, made on
+    /// this device. Throws when the Space stops being the selected, unlocked
+    /// one, or when the models fail. None when Tidy was turned off or its
+    /// models changed meanwhile, and a tab whose page changed meanwhile stays
+    /// loose.
+    func proposeTidyHeaders() async throws -> [TidyFolderProposal] {
         guard let space = browser.selectedUnlockedSpace(matching: assignment, accessController: spaceAccess) else {
             throw TidySpaceNoLongerShown()
         }
@@ -101,11 +100,28 @@ struct BrowserSidebarTabActions {
         else {
             throw TidySpaceNoLongerShown()
         }
-        guard OnDeviceTabTidyingService.isReady else { return }
-        try browser.tidySessionTabs(
-            folders: OnDeviceTabTidyingService.proposals(headers, unchangedSince: candidates, in: shownSpace),
-            in: assignment.spaceID)
+        guard OnDeviceTabTidyingService.isReady else { return [] }
+        return OnDeviceTabTidyingService.proposals(headers, unchangedSince: candidates, in: shownSpace)
+    }
+
+    /// Files tabs under `headers`. Throws when the Space stops being the
+    /// selected, unlocked one, or when the core refuses the headers because
+    /// the tabs changed since they were made. Does nothing once Tidy is
+    /// turned off.
+    func fileTidyHeaders(_ headers: [TidyFolderProposal]) throws {
+        guard browser.selectedUnlockedSpace(matching: assignment, accessController: spaceAccess) != nil else {
+            throw TidySpaceNoLongerShown()
+        }
+        guard BrowserAppPreferenceStore.shared.offersTabTidying else { return }
+        try browser.tidySessionTabs(folders: headers, in: assignment.spaceID)
         syncPagesAfterMutation()
+    }
+
+    /// The title of the Space's tab `tabID`, for showing headers before they
+    /// are filed.
+    func tidyTabTitle(_ tabID: UUID) -> String {
+        browser.selectedUnlockedSpace(matching: assignment, accessController: spaceAccess)?
+            .tabs.model(tabID)?.title ?? ""
     }
 
     /// Closes a header Tidy made by closing the tabs under it, as selecting

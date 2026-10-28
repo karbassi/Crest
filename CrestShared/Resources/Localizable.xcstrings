@@ -2160,6 +2160,9 @@
     "Applies to every Space on this device. Doesn’t sync." : {
 
     },
+    "Apply" : {
+
+    },
     "Apply Custom Viewport" : {
 
     },
@@ -4094,6 +4097,9 @@
     "Couldn’t Delete Space" : {
 
     },
+    "Couldn't download Tidy's models. Turn Tidy off and on to try again." : {
+
+    },
     "Couldn't download Tidy's word list. Turn Tidy off and on to try again." : {
 
     },
@@ -5417,6 +5423,9 @@
     "Downloading" : {
 
     },
+    "Downloading Tidy's models…" : {
+
+    },
     "Downloading Tidy's word list…" : {
 
     },
@@ -6594,6 +6603,9 @@
 
     },
     "Groups open tabs under headers using Apple Intelligence on this device. Turning it on downloads a 30 MB word list. Tab titles and addresses never leave this device." : {
+
+    },
+    "Groups open tabs under headers using open models on this device, and shows the groups before filing them. Turning it on downloads 50 MB of models. Tab titles and addresses never leave this device." : {
 
     },
     "Gules" : {
@@ -10984,9 +10996,6 @@
 
     },
     "Require Touch ID or password" : {
-
-    },
-    "Requires Apple Intelligence." : {
 
     },
     "Rerun onboarding" : {
