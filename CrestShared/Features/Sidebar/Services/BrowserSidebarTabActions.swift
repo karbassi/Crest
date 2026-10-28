@@ -89,18 +89,22 @@ struct BrowserSidebarTabActions {
     /// model. Throws when the Space stops being the selected, unlocked one,
     /// when the model fails, or when the core refuses the headers because the
     /// tabs changed while they were being made. Does nothing when Tidy was
-    /// turned off or Apple Intelligence became unavailable meanwhile.
+    /// turned off or Apple Intelligence became unavailable meanwhile, and a
+    /// tab whose page changed meanwhile stays loose.
     func tidyCurrentTabs() async throws {
         guard let space = browser.selectedUnlockedSpace(matching: assignment, accessController: spaceAccess) else {
             throw TidySpaceNoLongerShown()
         }
-        let headers = try await OnDeviceTabTidyingService().headers(
-            for: OnDeviceTabTidyingService.candidates(in: space))
-        guard browser.selectedUnlockedSpace(matching: assignment, accessController: spaceAccess) != nil else {
+        let candidates = OnDeviceTabTidyingService.candidates(in: space)
+        let headers = try await OnDeviceTabTidyingService().headers(for: candidates)
+        guard let shownSpace = browser.selectedUnlockedSpace(matching: assignment, accessController: spaceAccess)
+        else {
             throw TidySpaceNoLongerShown()
         }
         guard OnDeviceTabTidyingService.isReady else { return }
-        try browser.tidySessionTabs(folders: headers, in: assignment.spaceID)
+        try browser.tidySessionTabs(
+            folders: OnDeviceTabTidyingService.proposals(headers, unchangedSince: candidates, in: shownSpace),
+            in: assignment.spaceID)
         syncPagesAfterMutation()
     }
 

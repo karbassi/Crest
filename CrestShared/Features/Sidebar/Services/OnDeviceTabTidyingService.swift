@@ -104,6 +104,21 @@ struct OnDeviceTabTidyingService {
         }
     }
 
+    /// `proposals` without the tabs that are no longer loose web pages in
+    /// `space`, or whose title or address changed since `snapshot` was read,
+    /// and without the headers left holding fewer than two tabs.
+    @MainActor
+    static func proposals(
+        _ proposals: [TidyFolderProposal], unchangedSince snapshot: [TidyTabCandidate], in space: SpaceModel
+    ) -> [TidyFolderProposal] {
+        let current = Dictionary(uniqueKeysWithValues: candidates(in: space).map { ($0.tabID, $0) })
+        let unchanged = Set(snapshot.filter { current[$0.tabID] == $0 }.map(\.tabID))
+        return proposals.compactMap { proposal in
+            let tabIDs = proposal.tabIDs.filter(unchanged.contains)
+            return tabIDs.count >= 2 ? TidyFolderProposal(folderTitle: proposal.folderTitle, tabIDs: tabIDs) : nil
+        }
+    }
+
     /// How many tabs `candidates(in:)` would return, read without their
     /// titles, so a page changing its title doesn't redraw whoever asks.
     @MainActor

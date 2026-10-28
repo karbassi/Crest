@@ -4613,6 +4613,10 @@
     "sidebar-tidy-stops-when-unavailable": {
       "category": "internal",
       "message": "Tidy makes no headers when it is turned off or Apple Intelligence becomes unavailable while it is grouping tabs."
+    },
+    "sidebar-tidy-skips-changed-tabs": {
+      "category": "internal",
+      "message": "A tab that navigates or changes its title while Tidy is grouping stays loose instead of landing under a header made for its old page."
     }
   }
 }
