@@ -55,7 +55,7 @@ public sealed partial class BrowserContractsTests {
     }
 
     [Fact]
-    public void ClosingATidyHeaderArchivesItsTabsAndRemovesIt() {
+    public void ATidyHeaderGoesWithTheLastOfItsTabsWhenTheyClose() {
         var f = new BatchSpace();
         using var device = new TestDevice(f.Session);
         var core = device.Authority;
@@ -64,14 +64,14 @@ public sealed partial class BrowserContractsTests {
         var header = Assert.Single(core.Current.Spaces[0].Folders, folder => folder.IsTidyHeader);
         Assert.True(StoredSessionCodec.DecodeFolder(StoredSessionCodec.Encode(header)).IsTidyHeader);
 
-        Assert.IsType<NotATidyHeader>(Assert.Throws<Rejected>(() => device.Send(
-            new CloseTidyHeader(device.Workspace, window, f.Space, f.OpenFolder))).Rejection);
-        device.Send(new CloseTidyHeader(device.Workspace, window, f.Space, header.Id));
+        device.Send(new CloseTabs(device.Workspace, window, f.Space, Picking(f.Open)));
+        Assert.Contains(core.Current.Spaces[0].Folders, folder => folder.Id == header.Id);
+        device.Send(new CloseTabs(device.Workspace, window, f.Space, Picking(f.Last, f.Filed)));
 
         var space = core.Current.Spaces[0];
         Assert.DoesNotContain(space.Folders, folder => folder.Id == header.Id);
-        Assert.DoesNotContain(space.Tabs, tab => tab.Id == f.Open || tab.Id == f.Last);
-        Assert.Contains(space.ArchivedTabs, archived => archived.Tab.Id == f.Open);
+        Assert.Contains(space.Folders, folder => folder.Id == f.OpenFolder);
+        Assert.Contains(space.ArchivedTabs, archived => archived.Tab.Id == f.Last);
     }
 
     [Fact]

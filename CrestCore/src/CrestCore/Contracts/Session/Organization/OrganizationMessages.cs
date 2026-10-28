@@ -38,9 +38,6 @@ public sealed record TabCannotBeTidied(Guid TabId) : Rejection;
 /// A folder Tidy proposes holds fewer than two tabs.
 public sealed record TidyFolderNeedsTwoTabs(string FolderTitle) : Rejection;
 
-/// The folder is not a header Tidy made, so it does not close as one.
-public sealed record NotATidyHeader(Guid FolderId) : Rejection;
-
 #endregion
 
 #region Rejections - Splits

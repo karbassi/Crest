@@ -4617,6 +4617,10 @@
     "sidebar-tidy-skips-changed-tabs": {
       "category": "internal",
       "message": "A tab that navigates or changes its title while Tidy is grouping stays loose instead of landing under a header made for its old page."
+    },
+    "sidebar-tidy-header-closes-like-tabs": {
+      "category": "internal",
+      "message": "Closing a Tidy header closes its tabs the way closing them does, asking first when a page wants to stay open, with the same close button as a tab; test launches no longer touch the installed app's word list, and Tidy's logs never name a tab."
     }
   }
 }

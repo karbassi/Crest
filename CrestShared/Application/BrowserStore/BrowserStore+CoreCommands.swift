@@ -130,12 +130,6 @@ extension BrowserStore {
         try family.commit(
             TidyCurrentTabs(workspaceID: family.workspaceID, spaceID: spaceID, folders: folders), from: self)
     }
-    /// Archives the tabs under a header Tidy made and removes the header.
-    func closeSessionTidyHeader(_ folderID: UUID, in spaceID: UUID) -> Bool {
-        family.send(
-            CloseTidyHeader(workspaceID: family.workspaceID, windowID: windowID, spaceID: spaceID, folderID: folderID),
-            from: self)
-    }
 
     func setSessionTabResidency(_ keep: Bool, tabID: UUID, in spaceID: UUID) -> Bool {
         family.send(

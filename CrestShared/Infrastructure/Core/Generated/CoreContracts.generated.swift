@@ -278,7 +278,6 @@ enum Rejection: Equatable, Error, Sendable {
     case noSetup(NoSetup)
     case noSplitStep(NoSplitStep)
     case noStoredSession(NoStoredSession)
-    case notATidyHeader(NotATidyHeader)
     case notAnArchive(NotAnArchive)
     case notPrivateWorkspace(NotPrivateWorkspace)
     case pageNotLoadable(PageNotLoadable)
@@ -1626,13 +1625,6 @@ struct CloseTabs: Intent, SessionIntent, Equatable, Sendable {
     let windowID: UUID
     let spaceID: UUID
     let selection: TabSelection
-}
-
-struct CloseTidyHeader: Intent, SessionIntent, Equatable, Sendable {
-    let workspaceID: UUID
-    let windowID: UUID
-    let spaceID: UUID
-    let folderID: UUID
 }
 
 struct CloseWindow: Intent, WindowIntent, Equatable, Sendable {
@@ -3972,10 +3964,6 @@ struct NormalizeBranding: Query, Equatable, Sendable {
 
 struct NormalizedBranding: Equatable, Sendable {
     let branding: SpaceBranding
-}
-
-struct NotATidyHeader: Equatable, Sendable {
-    let folderID: UUID
 }
 
 struct NotAnArchive: Equatable, Sendable {

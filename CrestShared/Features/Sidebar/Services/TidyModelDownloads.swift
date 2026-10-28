@@ -1,6 +1,5 @@
 import CryptoKit
 import Foundation
-import OSLog
 
 // MARK: - Types
 
@@ -39,8 +38,6 @@ final class TidyModelDownloads {
         address: URL(string: "https://huggingface.co/minishlab/potion-base-8M/resolve/\(revision)/model.safetensors")!,
         sha256: "f65d0f325faadc1e121c319e2faa41170d3fa07d8c89abd48ca5358d9a223de2")
 
-    private static let logger = Logger(subsystem: "com.pauldavis.crest", category: "Tidy")
-
     // MARK: - Variables
 
     /// The loaded table, once its files are downloaded and verified. Tidy is
@@ -53,12 +50,26 @@ final class TidyModelDownloads {
     /// was turned off during sets nothing when it finishes.
     private var syncCount = 0
 
+    /// Where the table is kept: the installed app's storage, or a named
+    /// isolated launch's own, as `BrowserTabStateArchive` keeps tab state.
+    /// Nil for any other isolated launch, so it never reads or deletes the
+    /// installed app's copy.
     private var directory: URL? {
-        try? FileManager.default.url(
-            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
-        )
-        .appendingPathComponent(ProductIdentity.storageDirectoryName, isDirectory: true)
-        .appendingPathComponent("Tidy", isDirectory: true)
+        let environment = BrowserLaunchEnvironment.current
+        guard
+            var directory = try? FileManager.default.url(
+                for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+            )
+            .appendingPathComponent(ProductIdentity.storageDirectoryName, isDirectory: true)
+        else { return nil }
+        if environment.requiresIsolation {
+            guard !environment.isXCTestRuntime, !environment.isSwiftUIPreviewRuntime,
+                let identity = environment.persistentIsolationID
+            else { return nil }
+            directory = directory.appendingPathComponent("Isolated", isDirectory: true)
+                .appendingPathComponent(Self.sha256(of: Data(identity.utf8)), isDirectory: true)
+        }
+        return directory.appendingPathComponent("Tidy", isDirectory: true)
     }
 
     // MARK: - Actions - Keeping in step
@@ -92,7 +103,7 @@ final class TidyModelDownloads {
         } catch {
             guard call == syncCount else { return }
             didFail = true
-            Self.logger.error("Tidy couldn't get its word table: \(String(describing: error))")
+            DiagnosticLog.tidy.error("Tidy couldn't get its word table: \(DiagnosticLog.describe(error))")
         }
     }
 

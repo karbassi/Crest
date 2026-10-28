@@ -1,6 +1,5 @@
 import Foundation
 import FoundationModels
-import OSLog
 
 /// Keyphrases Apple's on-device model writes for open tabs in the background
 /// while Tidy is on, so pressing Tidy only has to group and name them.
@@ -27,8 +26,6 @@ final class TidyTabDescriptions {
         for or reading about, from specific to broad, ending with the broad project or subject it belongs to. \
         Never name the website. Write one keyphrase per line, with no numbering.
         """
-
-    private static let logger = Logger(subsystem: "com.pauldavis.crest", category: "Tidy")
 
     // MARK: - Variables
 
@@ -131,9 +128,17 @@ final class TidyTabDescriptions {
             .respond(to: candidate.modelDescription, options: options).content
             return cleanedKeyphrases(text.split(whereSeparator: \.isNewline).map(String.init))
         } catch {
-            logger.error("Tidy couldn't describe a tab: \(String(describing: error))")
+            DiagnosticLog.tidy.error("Tidy couldn't describe a tab: \(loggedName(of: error))")
             return isTemporary(error) ? nil : []
         }
+    }
+
+    /// `error` by its type and case alone, because the model's errors can
+    /// quote the prompt, which holds the tab's title and address.
+    private static func loggedName(of error: any Error) -> String {
+        let mirror = Mirror(reflecting: error)
+        guard mirror.displayStyle == .enum else { return "\(type(of: error))" }
+        return "\(type(of: error)).\(mirror.children.first?.label ?? "\(error)")"
     }
 
     /// Whether `error` says the model is busy, rate limited or not ready, rather

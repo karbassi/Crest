@@ -116,12 +116,11 @@ private struct BrowserTidyHeaderRow: View {
             .accessibilityAction(named: "Close \(folder.shownTitle)", closeHeader)
 
             Button(action: closeHeader) {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                BrowserSidebarTabTrailingControlLabel(systemName: "xmark", metrics: closeMetrics)
             }
-            .buttonStyle(CrestChromeButtonStyle(controlSize: CGSize(width: 20, height: 20)))
-            .opacity(showsCloseButton ? 1 : 0)
+            .modifier(BrowserSidebarTabTrailingControlStyle(metrics: closeMetrics))
+            .foregroundStyle(Color.primary)
+            .opacity(showsCloseButton ? closeMetrics.closeOpacity(isSelected: false) : 0)
             .disabled(!showsCloseButton)
             .accessibilityLabel("Close \(folder.shownTitle)")
             .accessibilityHint("Closes the tabs under this header")
@@ -134,9 +133,10 @@ private struct BrowserTidyHeaderRow: View {
         _ = configuration.context.tabActions.closeTidyHeader(folder.id)
     }
 
-    private var showsCloseButton: Bool {
-        isHovering || !configuration.capabilities.revealsRowControlsOnHoverOnly
-    }
+    /// The close control a tab row draws, so the header's matches it.
+    private var closeMetrics: BrowserTabTrailingControlMetrics { configuration.capabilities.trailingControlMetrics }
+
+    private var showsCloseButton: Bool { closeMetrics.isRevealed(isHovering: isHovering, isSelected: false) }
 }
 
 /// The folder's title, in its color where the person asked for it, and bold

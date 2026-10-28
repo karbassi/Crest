@@ -202,27 +202,21 @@ struct OnDeviceTabTidyingService {
     }
 
     private static func isTopic(_ name: String) -> Bool {
-        name.contains(where: \.isLetter) && name.lowercased() != noTopic
+        name.contains(where: \.isLetter)
             && looseGroupName.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) == nil
     }
 
-    /// One header per topic name, merging groups the model named alike, with
-    /// their tabs and those tabs' `copies` in sidebar order.
+    /// A header for each group named for a topic, with its tabs and those
+    /// tabs' `copies` in sidebar order. The core files groups named alike
+    /// under one header.
     private static func proposals(
         groups: [[TidyTabCandidate]], names: [String], copies: [String: [TidyTabCandidate]],
         inOrderOf candidates: [TidyTabCandidate]
     ) -> [TidyFolderProposal] {
-        var namesInOrder: [String] = []
-        var tabIDsByName: [String: Set<UUID>] = [:]
-        for (group, name) in zip(groups, names.map(fittedName)) where isTopic(name) {
-            let key = name.lowercased()
-            if tabIDsByName[key] == nil { namesInOrder.append(name) }
-            tabIDsByName[key, default: []].formUnion(group.flatMap { copies[$0.modelDescription] ?? [$0] }.map(\.tabID))
-        }
-        return namesInOrder.compactMap { name in
-            let members = tabIDsByName[name.lowercased()] ?? []
-            let tabIDs = candidates.map(\.tabID).filter(members.contains)
-            return tabIDs.count >= 2 ? TidyFolderProposal(folderTitle: name, tabIDs: tabIDs) : nil
+        zip(groups, names.map(fittedName)).compactMap { group, name in
+            guard isTopic(name) else { return nil }
+            let members = Set(group.flatMap { copies[$0.modelDescription] ?? [$0] }.map(\.tabID))
+            return TidyFolderProposal(folderTitle: name, tabIDs: candidates.map(\.tabID).filter(members.contains))
         }
     }
 
