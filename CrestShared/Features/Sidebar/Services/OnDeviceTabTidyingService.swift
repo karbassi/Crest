@@ -29,6 +29,14 @@ struct OnDeviceTabTidyingService {
     /// Whether this device can run the on-device model now.
     static var isModelAvailable: Bool { SystemLanguageModel.default.isAvailable }
 
+    /// Whether the person turned Tidy on, the on-device model can run, and
+    /// its word table is loaded.
+    @MainActor
+    static var isReady: Bool {
+        BrowserAppPreferenceStore.shared.offersTabTidying && isModelAvailable
+            && TidyModelDownloads.shared.embedder != nil
+    }
+
     /// Spaces this small are checked tab by tab after naming; larger ones
     /// would wait too long for it.
     private static let maximumVerifiedTabCount = 20

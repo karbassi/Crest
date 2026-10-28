@@ -4609,6 +4609,10 @@
     "sidebar-tidy-localizable-strings": {
       "category": "internal",
       "message": "Tidy's settings, button, errors and header accessibility text can be translated."
+    },
+    "sidebar-tidy-stops-when-unavailable": {
+      "category": "internal",
+      "message": "Tidy makes no headers when it is turned off or Apple Intelligence becomes unavailable while it is grouping tabs."
     }
   }
 }

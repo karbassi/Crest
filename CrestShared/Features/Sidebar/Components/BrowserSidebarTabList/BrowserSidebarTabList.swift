@@ -60,13 +60,9 @@ private struct BrowserCurrentTabsSeam: View {
     /// pages to be worth tidying. Counted without reading titles, so a page
     /// changing its title never redraws the seam.
     private var canTidy: Bool {
-        guard BrowserAppPreferenceStore.shared.offersTabTidying, OnDeviceTabTidyingService.isModelAvailable,
-            TidyModelDownloads.shared.embedder != nil
-        else {
-            return false
-        }
-        return OnDeviceTabTidyingService.candidateCount(in: context.space)
-            >= OnDeviceTabTidyingService.minimumLooseTabCount
+        OnDeviceTabTidyingService.isReady
+            && OnDeviceTabTidyingService.candidateCount(in: context.space)
+                >= OnDeviceTabTidyingService.minimumLooseTabCount
     }
 
     /// Whether the current section holds a tab, at its top level or in one of
